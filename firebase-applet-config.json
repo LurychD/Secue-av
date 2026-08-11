@@ -1,0 +1,12 @@
+{
+  "projectId": "secue-av",
+  "appId": "1:572210027218:web:ed7edad6d5301fcbbd2b0b",
+  "apiKey": "AIzaSyCnJ9MxE9sAU-f37kg-mGjqkJf3h_XyK5E",
+  "authDomain": "secue-av.firebaseapp.com",
+  "firestoreDatabaseId": "secue-db",
+  "storageBucket": "secue-av.firebasestorage.app",
+  "messagingSenderId": "572210027218",
+  "measurementId": "",
+  "oAuthClientId": "572210027218-l8t7at2fvm0fcil9f7s6eihkbq7c28t0.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
+}
