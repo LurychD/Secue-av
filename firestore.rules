@@ -1,0 +1,198 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // STANDALONE ID VALIDATION helper
+    function isValidId(id) {
+      return id is string 
+        && id.size() > 0 
+        && id.size() <= 64 
+        && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // PROJECT MEMBERSHIP verification
+    function isProjectMember(projectId) {
+      return request.auth != null && (
+        get(/databases/$(database)/documents/projects/$(projectId)).data.members.any(x, x.email == request.auth.token.email) ||
+        get(/databases/$(database)/documents/projects/$(projectId)).data.members.any(x, x.id == request.auth.uid) ||
+        // Fallback para pruebas rápidas / bypass controlado
+        request.auth.token.email == "axeldibarra@gmail.com"
+      );
+    }
+
+    // Standalone Validation Blueprints
+    function isValidProject(data) {
+      return isValidId(data.id)
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.productionType is string && (data.productionType in ['3D', '2D', 'StopMotion', 'Hibrido'])
+        && data.members is list && data.members.size() <= 100
+        && data.createdAt is int
+        && data.updatedAt is int;
+    }
+
+    function isValidShot(data) {
+      return isValidId(data.uuid)
+        && isValidId(data.projectId)
+        && data.code is string && data.code.size() <= 50
+        && data.status is string && (data.status in ['Pendiente', 'En_Proceso', 'Renderizado', 'Aprobado', 'Con_Observaciones'])
+        && data.createdAt is int
+        && data.updatedAt is int;
+    }
+
+    function isValidAsset(data) {
+      return isValidId(data.id)
+        && isValidId(data.projectId)
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.category is string && (data.category in ['Personaje', 'Prop', 'Entorno', 'Luz', 'Efecto'])
+        && data.status is string
+        && data.createdAt is int
+        && data.updatedAt is int;
+    }
+
+    function isValidDaily(data) {
+      return isValidId(data.id)
+        && isValidId(data.projectId)
+        && data.shotUuid is string
+        && data.artistEmail is string
+        && data.version is int
+        && data.renderUrl is string
+        && data.status is string && (data.status in ['En_Revision', 'Aprobado', 'Rechazado'])
+        && data.timestamp is int;
+    }
+
+    function isValidMontage(data) {
+      return isValidId(data.id)
+        && isValidId(data.projectId)
+        && data.name is string && data.name.size() <= 100
+        && data.cuts is list && data.cuts.size() <= 200
+        && data.status is string && (data.status in ['Borrador', 'Pre_Montaje', 'Corte_Fino', 'Aprobado'])
+        && data.updatedAt is int;
+    }
+
+    function isValidSoundTrack(data) {
+      return isValidId(data.id)
+        && isValidId(data.projectId)
+        && data.name is string && data.name.size() <= 100
+        && data.fileUrl is string
+        && data.type is string && (data.type in ['Musica', 'Efecto', 'Voz', 'Ambiente'])
+        && data.duration is number
+        && data.offsetFrames is int
+        && data.createdAt is int
+        && data.updatedAt is int;
+    }
+
+    function isValidAuditLog(data) {
+      return isValidId(data.id)
+        && isValidId(data.projectId)
+        && data.action is string
+        && data.timestamp is int
+        && data.userId is string
+        && data.userEmail is string
+        && data.details is string && data.details.size() <= 1000;
+    }
+
+    function isValidUsuario(data) {
+      return isValidId(data.uid)
+        && data.email is string
+        && data.displayName is string && data.displayName.size() <= 100
+        && data.role is string && (data.role in ['Director', 'Artista', 'Productor'])
+        && data.lastLogin is int;
+    }
+
+    // RULES MAPPINGS FOR EACH COLLECTION
+
+    // 1. Projects
+    match /projects/{projectId} {
+      allow get: if request.auth != null;
+      allow list: if request.auth != null;
+      allow create: if request.auth != null && isValidProject(request.resource.data);
+      allow update: if request.auth != null 
+                    && isProjectMember(projectId) 
+                    && isValidProject(request.resource.data);
+      allow delete: if request.auth != null && isProjectMember(projectId);
+    }
+
+    // 2. Shots
+    match /shots/{shotId} {
+      allow get: if request.auth != null;
+      allow list: if request.auth != null && resource.data.projectId != null && isProjectMember(resource.data.projectId);
+      allow create: if request.auth != null 
+                    && isProjectMember(request.resource.data.projectId) 
+                    && isValidShot(request.resource.data);
+      allow update: if request.auth != null 
+                    && isProjectMember(request.resource.data.projectId) 
+                    && isValidShot(request.resource.data);
+      allow delete: if request.auth != null && isProjectMember(resource.data.projectId);
+    }
+
+    // 3. Assets
+    match /assets/{assetId} {
+      allow get: if request.auth != null;
+      allow list: if request.auth != null && resource.data.projectId != null && isProjectMember(resource.data.projectId);
+      allow create: if request.auth != null 
+                    && isProjectMember(request.resource.data.projectId) 
+                    && isValidAsset(request.resource.data);
+      allow update: if request.auth != null 
+                    && isProjectMember(request.resource.data.projectId) 
+                    && isValidAsset(request.resource.data);
+      allow delete: if request.auth != null && isProjectMember(resource.data.projectId);
+    }
+
+    // 4. Dailies
+    match /dailies/{dailyId} {
+      allow get: if request.auth != null;
+      allow list: if request.auth != null && resource.data.projectId != null && isProjectMember(resource.data.projectId);
+      allow create: if request.auth != null 
+                    && isProjectMember(request.resource.data.projectId) 
+                    && isValidDaily(request.resource.data);
+      allow update: if request.auth != null 
+                    && isProjectMember(request.resource.data.projectId) 
+                    && isValidDaily(request.resource.data);
+      allow delete: if request.auth != null && isProjectMember(resource.data.projectId);
+    }
+
+    // 5. Montages
+    match /montages/{montageId} {
+      allow get: if request.auth != null;
+      allow list: if request.auth != null && resource.data.projectId != null && isProjectMember(resource.data.projectId);
+      allow create: if request.auth != null 
+                    && isProjectMember(request.resource.data.projectId) 
+                    && isValidMontage(request.resource.data);
+      allow update: if request.auth != null 
+                    && isProjectMember(request.resource.data.projectId) 
+                    && isValidMontage(request.resource.data);
+      allow delete: if request.auth != null && isProjectMember(resource.data.projectId);
+    }
+
+    // 6. Soundtracks
+    match /soundtracks/{soundtrackId} {
+      allow get: if request.auth != null;
+      allow list: if request.auth != null && resource.data.projectId != null && isProjectMember(resource.data.projectId);
+      allow create: if request.auth != null 
+                    && isProjectMember(request.resource.data.projectId) 
+                    && isValidSoundTrack(request.resource.data);
+      allow update: if request.auth != null 
+                    && isProjectMember(request.resource.data.projectId) 
+                    && isValidSoundTrack(request.resource.data);
+      allow delete: if request.auth != null && isProjectMember(resource.data.projectId);
+    }
+
+    // 7. Audit Logs - INMUTABILIDAD EXIGIDA (Solo lectura y creación)
+    match /audit_logs/{logId} {
+      allow get, list: if request.auth != null && resource.data.projectId != null && isProjectMember(resource.data.projectId);
+      allow create: if request.auth != null 
+                    && isProjectMember(request.resource.data.projectId) 
+                    && isValidAuditLog(request.resource.data);
+      allow update, delete: if false; // Inmutables
+    }
+
+    // 8. Usuarios - AISLAMIENTO estricto por ID
+    match /usuarios/{uid} {
+      allow get: if request.auth != null;
+      allow list: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == uid && isValidUsuario(request.resource.data);
+      allow update: if request.auth != null && request.auth.uid == uid && isValidUsuario(request.resource.data);
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

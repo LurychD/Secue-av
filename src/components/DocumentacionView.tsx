@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from "react";
 import { localDB } from "../db/dexie";
-import { dbAdapter } from "../db/adapters";
+import { dbAdapter, getFirestoreDisabledForModeConflict, getLastFirestoreErrorMessage } from "../db/adapters";
 import { Project, HelpArticle } from "../types";
 import { HelpCircle, Search, Terminal, Database, Activity, RefreshCw, FileText, CheckCircle2, ShieldCheck } from "lucide-react";
 
@@ -23,6 +23,7 @@ export const DocumentacionView: React.FC<DocumentacionViewProps> = ({ projectId 
   const [pendingChangesCount, setPendingChangesCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncLogs, setSyncLogs] = useState<string[]>([]);
+  const [firestoreConflictError, setFirestoreConflictError] = useState<string | null>(null);
 
   // Wikipedia Help Articles
   const [articles, setArticles] = useState<HelpArticle[]>([
@@ -85,7 +86,23 @@ Secue implementa el patrón **Adaptador Doble** para independizar las vistas de 
   useEffect(() => {
     updateDiagnostics();
     const interval = setInterval(updateDiagnostics, 2500);
-    return () => clearInterval(interval);
+
+    // Revisar si ya hay un error de conflicto de modo activo
+    if (getFirestoreDisabledForModeConflict()) {
+      setFirestoreConflictError(getLastFirestoreErrorMessage());
+    }
+
+    const handleConflict = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      setFirestoreConflictError(getLastFirestoreErrorMessage() || detail || "Conflicto de modo de base de datos de Firestore detectado.");
+    };
+
+    window.addEventListener("firestore-mode-conflict", handleConflict);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("firestore-mode-conflict", handleConflict);
+    };
   }, []);
 
   const handleManualSync = async () => {
@@ -260,6 +277,26 @@ Secue implementa el patrón **Adaptador Doble** para independizar las vistas de 
               </h3>
               <span className="text-[10px] text-zinc-500 uppercase font-mono">Modo Administrador</span>
             </div>
+
+            {firestoreConflictError && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-amber-400 text-xs text-left space-y-2">
+                <h4 className="font-bold uppercase tracking-wider text-[10px] text-amber-500 flex items-center gap-1.5">
+                  ⚠️ Conflicto de Configuración en Firebase Detectado
+                </h4>
+                <p className="font-sans leading-normal text-[11px]">
+                  {firestoreConflictError}
+                </p>
+                <div className="pt-1.5 font-sans text-[11px] text-zinc-400">
+                  <span className="font-bold text-zinc-300">¿Cómo resolverlo de forma permanente?</span>
+                  <ol className="list-decimal list-inside mt-1 space-y-1">
+                    <li>Ve a tu consola de Firebase o Google Cloud.</li>
+                    <li>Accede a la sección de bases de datos de Firestore.</li>
+                    <li>Si tu base de datos <code className="bg-zinc-800 px-1 py-0.5 rounded text-zinc-300">(default)</code> está en modo Datastore, debes crear una base de datos secundaria <b>Nativa</b> (por ejemplo, con ID <code className="bg-zinc-800 px-1 py-0.5 rounded text-zinc-300">secue-db</code>) en modo Native.</li>
+                    <li>Agrega la variable <code className="bg-zinc-800 px-1 py-0.5 rounded text-zinc-300">VITE_FIREBASE_DATABASE_ID</code> en tus secretos de AI Studio con el valor de tu base de datos Nativa.</li>
+                  </ol>
+                </div>
+              </div>
+            )}
 
             <div className="flex-1 bg-zinc-950 rounded-xl border border-zinc-900 p-4 font-mono text-xs text-emerald-400 overflow-y-auto space-y-2 text-left shadow-inner">
               <div className="text-zinc-600 border-b border-zinc-900 pb-2 mb-2">

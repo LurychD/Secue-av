@@ -1,0 +1,197 @@
+{
+  "entities": {
+    "Project": {
+      "title": "Project",
+      "description": "Un proyecto de cortometraje en el pipeline de Secue.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "ID del proyecto." },
+        "name": { "type": "string", "maxLength": 100, "description": "Nombre del cortometraje." },
+        "sinopsis": { "type": "string", "maxLength": 1000, "description": "Sinopsis de la obra." },
+        "year": { "type": "integer", "description": "Año de producción." },
+        "productionType": { "type": "string", "enum": ["3D", "2D", "StopMotion", "Hibrido"], "description": "Técnica de animación." },
+        "colors": { "type": "object", "description": "Paleta de colores del storyboard." },
+        "counters": { "type": "object", "description": "Contadores del pipeline (planos, assets, dailies)." },
+        "members": { "type": "array", "description": "Miembros invitados al equipo con sus permisos." },
+        "createdAt": { "type": "integer", "description": "Estampa de tiempo de creación." },
+        "updatedAt": { "type": "integer", "description": "Estampa de tiempo de última actualización." }
+      },
+      "required": ["id", "name", "productionType", "members", "createdAt", "updatedAt"]
+    },
+    "Shot": {
+      "title": "Shot",
+      "description": "Un plano o toma dentro de una secuencia del cortometraje.",
+      "type": "object",
+      "properties": {
+        "uuid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "ID único del plano." },
+        "projectId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "ID del proyecto padre." },
+        "code": { "type": "string", "maxLength": 20, "description": "Código identificador (ej: CH01_SQ01_PL02)." },
+        "sequence": { "type": "string", "maxLength": 20, "description": "Código de la secuencia padre." },
+        "status": { "type": "string", "enum": ["Pendiente", "En_Proceso", "Renderizado", "Aprobado", "Con_Observaciones"], "description": "Estado actual en el pipeline." },
+        "description": { "type": "string", "maxLength": 500, "description": "Descripción de la acción física/acting." },
+        "frameRange": { "type": "object", "description": "Rango de fotogramas (ej: start, end)." },
+        "assignedArtist": { "type": "string", "description": "Nombre del artista asignado." },
+        "assignedArtistEmail": { "type": "string", "description": "Correo del artista asignado." },
+        "renderProgress": { "type": "integer", "description": "Porcentaje de renderizado completado." },
+        "renderStatus": { "type": "string", "description": "Estado del motor de render." },
+        "approvedBy": { "type": "string", "description": "Nombre del director que aprobó." },
+        "approvedByEmail": { "type": "string", "description": "Correo del director que aprobó." },
+        "notes": { "type": "string", "maxLength": 1000, "description": "Notas específicas del director." },
+        "logs": { "type": "array", "description": "Historial de transiciones de estado del plano." },
+        "tags": { "type": "array", "description": "Etiquetas de iluminación/composición." },
+        "version": { "type": "integer", "description": "Número de versión actual." },
+        "createdAt": { "type": "integer", "description": "Creación." },
+        "updatedAt": { "type": "integer", "description": "Última edición." }
+      },
+      "required": ["uuid", "projectId", "code", "sequence", "status", "createdAt", "updatedAt"]
+    },
+    "Asset": {
+      "title": "Asset",
+      "description": "Un elemento de utilería, personaje, set o luz para la producción.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "ID único." },
+        "projectId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "Proyecto padre." },
+        "name": { "type": "string", "maxLength": 100, "description": "Nombre de la utilería o personaje." },
+        "category": { "type": "string", "enum": ["Personaje", "Prop", "Entorno", "Luz", "Efecto"], "description": "Categoría del asset." },
+        "status": { "type": "string", "enum": ["Modelado", "Texturizado", "Rigged", "Listo", "Aprobado"], "description": "Fase de modelado en la que se encuentra." },
+        "description": { "type": "string", "maxLength": 500, "description": "Instrucciones de modelado/textura." },
+        "version": { "type": "integer", "description": "Versión del archivo." },
+        "fileUrl": { "type": "string", "description": "Enlace al archivo de producción (gLTF/USD)." },
+        "assignedArtist": { "type": "string", "description": "Artista." },
+        "assignedArtistEmail": { "type": "string", "description": "Correo del artista." },
+        "approvalStatus": { "type": "string", "description": "Estado de validación." },
+        "notes": { "type": "string", "description": "Notas de feedback." },
+        "history": { "type": "array", "description": "Bitácora de revisiones de render." },
+        "createdAt": { "type": "integer", "description": "Creación." },
+        "updatedAt": { "type": "integer", "description": "Edición." }
+      },
+      "required": ["id", "projectId", "name", "category", "status", "createdAt", "updatedAt"]
+    },
+    "Daily": {
+      "title": "Daily",
+      "description": "Una entrega diaria de render para revisión por el equipo directivo.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "ID único." },
+        "projectId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "Proyecto padre." },
+        "shotUuid": { "type": "string", "description": "ID de la toma asociada." },
+        "artistName": { "type": "string", "description": "Nombre del artista de render." },
+        "artistEmail": { "type": "string", "description": "Correo del artista." },
+        "version": { "type": "integer", "description": "Versión del render." },
+        "notes": { "type": "string", "maxLength": 1000, "description": "Comentario del artista." },
+        "renderUrl": { "type": "string", "description": "Enlace al video del render." },
+        "status": { "type": "string", "enum": ["En_Revision", "Aprobado", "Rechazado"], "description": "Veredicto del director." },
+        "comments": { "type": "array", "description": "Comentarios de anotación en el timeline." },
+        "timestamp": { "type": "integer", "description": "Estampa de tiempo de subida." },
+        "approvedAt": { "type": "integer", "description": "Estampa de aprobación." },
+        "approvedBy": { "type": "string", "description": "Director que aprobó." },
+        "approvedByEmail": { "type": "string", "description": "Correo del director." }
+      },
+      "required": ["id", "projectId", "shotUuid", "artistEmail", "version", "renderUrl", "status", "timestamp"]
+    },
+    "Montage": {
+      "title": "Montage",
+      "description": "Montaje del cortometraje (timeline de edición).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "ID del montaje." },
+        "projectId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "Proyecto padre." },
+        "name": { "type": "string", "maxLength": 100, "description": "Nombre de la línea de tiempo." },
+        "description": { "type": "string", "maxLength": 500, "description": "Descripción." },
+        "cuts": { "type": "array", "description": "Cortes del timeline secuenciados." },
+        "status": { "type": "string", "enum": ["Borrador", "Pre_Montaje", "Corte_Fino", "Aprobado"], "description": "Estado de la edición." },
+        "updatedBy": { "type": "string", "description": "Editor responsable." },
+        "updatedAt": { "type": "integer", "description": "Actualizado." }
+      },
+      "required": ["id", "projectId", "name", "cuts", "status", "updatedAt"]
+    },
+    "SoundTrack": {
+      "title": "SoundTrack",
+      "description": "Una pista de sonido o foley sincronizada con el timecode del corto.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "ID de la pista." },
+        "projectId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "Proyecto." },
+        "name": { "type": "string", "maxLength": 100, "description": "Nombre de la pista o foley." },
+        "fileUrl": { "type": "string", "description": "Ubicación del archivo de audio (.mp3, .wav)." },
+        "type": { "type": "string", "enum": ["Musica", "Efecto", "Voz", "Ambiente"], "description": "Clasificación de audio." },
+        "duration": { "type": "number", "description": "Duración en segundos." },
+        "offsetFrames": { "type": "integer", "description": "Desfase en fotogramas de sincronía." },
+        "description": { "type": "string", "maxLength": 500, "description": "Detalles." },
+        "volume": { "type": "number", "description": "Volumen por defecto." },
+        "isMuted": { "type": "boolean", "description": "Silenciado." },
+        "createdAt": { "type": "integer", "description": "Creación." },
+        "updatedAt": { "type": "integer", "description": "Actualización." }
+      },
+      "required": ["id", "projectId", "name", "fileUrl", "type", "duration", "offsetFrames", "createdAt", "updatedAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Bitácora de auditoría inmutable de cambios en el pipeline.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "ID del log." },
+        "projectId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "Proyecto padre." },
+        "action": { "type": "string", "description": "Acción ejecutada (ej: Miembro Invitado, Plano Creado)." },
+        "timestamp": { "type": "integer", "description": "Estampa de tiempo del log." },
+        "userId": { "type": "string", "description": "Usuario responsable." },
+        "userEmail": { "type": "string", "description": "Correo del usuario." },
+        "details": { "type": "string", "maxLength": 1000, "description": "Detalle." }
+      },
+      "required": ["id", "projectId", "action", "timestamp", "userId", "userEmail", "details"]
+    },
+    "Usuario": {
+      "title": "Usuario",
+      "description": "Perfil de usuario y configuración del pipeline.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "UID de Firebase Authentication." },
+        "email": { "type": "string", "description": "Correo de usuario." },
+        "displayName": { "type": "string", "maxLength": 100, "description": "Nombre de usuario." },
+        "photoURL": { "type": "string", "description": "Avatar." },
+        "bio": { "type": "string", "maxLength": 500, "description": "Biografía." },
+        "role": { "type": "string", "enum": ["Director", "Artista", "Productor"], "description": "Rol de producción." },
+        "notificationsEnabled": { "type": "boolean", "description": "Estado de alertas." },
+        "activeProject": { "type": "string", "description": "Proyecto seleccionado." },
+        "language": { "type": "string", "description": "Idioma preferido." },
+        "lastLogin": { "type": "integer", "description": "Último ingreso." }
+      },
+      "required": ["uid", "email", "displayName", "role", "lastLogin"]
+    }
+  },
+  "firestore": {
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Colección de proyectos de animación."
+    },
+    "/shots/{shotId}": {
+      "schema": "Shot",
+      "description": "Colección de planos secuenciados del pipeline."
+    },
+    "/assets/{assetId}": {
+      "schema": "Asset",
+      "description": "Colección de personajes, utilería y recursos 3D."
+    },
+    "/dailies/{dailyId}": {
+      "schema": "Daily",
+      "description": "Colección de revisiones de renders diarios."
+    },
+    "/montages/{montageId}": {
+      "schema": "Montage",
+      "description": "Líneas de tiempo y cortes de edición."
+    },
+    "/soundtracks/{soundtrackId}": {
+      "schema": "SoundTrack",
+      "description": "Colección de foleys y pistas musicales."
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Bitácoras de auditoría inmutables del cortometraje."
+    },
+    "/usuarios/{uid}": {
+      "schema": "Usuario",
+      "description": "Perfiles inmutables e independientes de cada usuario."
+    }
+  }
+}

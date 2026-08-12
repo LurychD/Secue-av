@@ -58,6 +58,37 @@ export interface IStorageAdapter {
   deleteFile(path: string): Promise<void>;
 }
 
+// Banderas de estado para el conflicto de base de datos en Modo Datastore
+let isFirestoreDisabledForModeConflict = false;
+let lastFirestoreErrorMessage = "";
+
+export function getFirestoreDisabledForModeConflict(): boolean {
+  return isFirestoreDisabledForModeConflict;
+}
+
+export function getLastFirestoreErrorMessage(): string {
+  return lastFirestoreErrorMessage;
+}
+
+export function handleFirestoreError(e: any) {
+  if (!e) return;
+  const msg = e.message || String(e);
+  if (
+    msg.includes("Firestore in Native mode API is disabled") ||
+    msg.includes("Datastore mode") ||
+    msg.includes("Data Access modes")
+  ) {
+    if (!isFirestoreDisabledForModeConflict) {
+      isFirestoreDisabledForModeConflict = true;
+      lastFirestoreErrorMessage = "La base de datos de Google Cloud / Firebase está configurada en 'Modo Datastore' en lugar de 'Modo Nativo' de Firestore. Se ha desactivado temporalmente la réplica remota para continuar operando con total estabilidad offline (Offline-first).";
+      console.warn("[Firebase Mode Conflict Detected] La base de datos está en modo Datastore en lugar de modo Nativo de Firestore. Desactivando sincronización remota para operar 100% offline sin errores:", msg);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("firestore-mode-conflict", { detail: msg }));
+      }
+    }
+  }
+}
+
 // Estructura de Debounce para escrituras a Firestore (2 segundos de inactividad)
 const writeDebounceTimers: Record<string, any> = {};
 
@@ -70,6 +101,7 @@ function debounceRemoteWrite(key: string, fn: () => Promise<void>) {
       await fn();
     } catch (e) {
       console.error("[Debounce Write Error]", e);
+      handleFirestoreError(e);
     }
     delete writeDebounceTimers[key];
   }, 2000);
@@ -116,6 +148,93 @@ export class FirebaseDatabaseAdapter implements IDatabaseAdapter {
     return !(import.meta as any).env.VITE_FIREBASE_API_KEY || !(import.meta as any).env.VITE_FIREBASE_API_KEY.includes("FakeKey");
   }
 
+  private logOfflineError(context: string, e: any) {
+    if (!e) return;
+    const msg = e.message || String(e);
+    const code = e.code || "";
+    const isOffline = 
+      !navigator.onLine || 
+      code === "unavailable" || 
+      msg.includes("offline") || 
+      msg.includes("Failed to get document because the client is offline") ||
+      msg.includes("Failed to get document");
+    
+    if (isOffline) {
+      console.info(`[Offline-First] ${context}: Operando localmente sin conexión de red. (${msg})`);
+    } else {
+      console.error(`Firebase ${context} error:`, e);
+      handleFirestoreError(e);
+    }
+  }
+
+  private async backgroundSyncProject(id: string, local: Project): Promise<void> {
+    try {
+      const snap = await getDoc(doc(db, "projects", id));
+      if (snap.exists()) {
+        const remote = snap.data() as Project;
+        const merged = mergeGranular(local, remote);
+        
+        const localStr = JSON.stringify(local);
+        const mergedStr = JSON.stringify(merged);
+        if (localStr !== mergedStr) {
+          await localDB.projects.put(merged);
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("local-db-updated", { detail: { collection: "projects", id } }));
+          }
+        }
+      }
+    } catch (e) {
+      this.logOfflineError("backgroundSyncProject", e);
+    }
+  }
+
+  private async backgroundSyncListProjects(localList: Project[]): Promise<void> {
+    try {
+      const snap = await getDocs(firestoreCollection(db, "projects"));
+      let hasChanges = false;
+      
+      for (const d of snap.docs) {
+        const remote = d.data() as Project;
+        const local = localList.find(p => p.id === remote.id);
+        const merged = local ? mergeGranular(local, remote) : remote;
+        
+        const localStr = local ? JSON.stringify(local) : "";
+        const mergedStr = JSON.stringify(merged);
+        if (localStr !== mergedStr) {
+          await localDB.projects.put(merged);
+          hasChanges = true;
+        }
+      }
+      
+      if (hasChanges && typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("local-db-updated", { detail: { collection: "projects" } }));
+      }
+    } catch (e) {
+      this.logOfflineError("backgroundSyncListProjects", e);
+    }
+  }
+
+  private async backgroundSyncUserSettings(uid: string, local: UserSettings): Promise<void> {
+    try {
+      const snap = await getDoc(doc(db, "usuarios", uid));
+      if (snap.exists()) {
+        const remote = snap.data() as UserSettings;
+        const merged = { ...local, ...remote };
+        
+        const localStr = JSON.stringify(local);
+        const mergedStr = JSON.stringify(merged);
+        if (localStr !== mergedStr) {
+          await localDB.usuarios.put(merged);
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("local-db-updated", { detail: { collection: "usuarios", id: uid } }));
+          }
+        }
+      }
+    } catch (e) {
+      this.logOfflineError("backgroundSyncUserSettings", e);
+    }
+  }
+
   async saveProject(project: Project): Promise<void> {
     project.updatedAt = Date.now();
     // 1. Guardar en Dexie localmente
@@ -133,40 +252,56 @@ export class FirebaseDatabaseAdapter implements IDatabaseAdapter {
 
   async getProject(id: string): Promise<Project | null> {
     const local = await localDB.projects.get(id);
+    if (local) {
+      if (this.isFirebaseConfigured() && navigator.onLine) {
+        this.backgroundSyncProject(id, local).catch(e => {
+          this.logOfflineError("backgroundSyncProject", e);
+        });
+      }
+      return local;
+    }
+
     if (this.isFirebaseConfigured() && navigator.onLine) {
       try {
         const snap = await getDoc(doc(db, "projects", id));
         if (snap.exists()) {
           const remote = snap.data() as Project;
-          const merged = local ? mergeGranular(local, remote) : remote;
-          await localDB.projects.put(merged);
-          return merged;
+          await localDB.projects.put(remote);
+          return remote;
         }
       } catch (e) {
-        console.error("Firebase getProject error:", e);
+        this.logOfflineError("getProject", e);
       }
     }
-    return local || null;
+    return null;
   }
 
   async listProjects(): Promise<Project[]> {
+    const localList = await localDB.projects.toArray();
+    if (localList.length > 0) {
+      if (this.isFirebaseConfigured() && navigator.onLine) {
+        this.backgroundSyncListProjects(localList).catch(e => {
+          this.logOfflineError("backgroundSyncListProjects", e);
+        });
+      }
+      return localList;
+    }
+
     if (this.isFirebaseConfigured() && navigator.onLine) {
       try {
         const snap = await getDocs(firestoreCollection(db, "projects"));
         const list: Project[] = [];
         for (const d of snap.docs) {
           const remote = d.data() as Project;
-          const local = await localDB.projects.get(remote.id);
-          const merged = local ? mergeGranular(local, remote) : remote;
-          await localDB.projects.put(merged);
-          list.push(merged);
+          await localDB.projects.put(remote);
+          list.push(remote);
         }
-        if (list.length > 0) return list;
+        return list;
       } catch (e) {
-        console.error("Firebase listProjects error:", e);
+        this.logOfflineError("listProjects", e);
       }
     }
-    return await localDB.projects.toArray();
+    return [];
   }
 
   async saveShot(shot: Shot): Promise<void> {
@@ -197,7 +332,7 @@ export class FirebaseDatabaseAdapter implements IDatabaseAdapter {
           return merged;
         }
       } catch (e) {
-        console.error("Firebase getShot error:", e);
+        this.logOfflineError("getShot", e);
       }
     }
     return local || null;
@@ -215,7 +350,7 @@ export class FirebaseDatabaseAdapter implements IDatabaseAdapter {
           await localDB.shots.put(merged);
         }
       } catch (e) {
-        console.error("Firebase listShots error:", e);
+        this.logOfflineError("listShots", e);
       }
     }
     return await localDB.shots.where("projectId").equals(projectId).toArray();
@@ -246,7 +381,7 @@ export class FirebaseDatabaseAdapter implements IDatabaseAdapter {
           await localDB.assets.put(merged);
         }
       } catch (e) {
-        console.error("Firebase listAssets error:", e);
+        this.logOfflineError("listAssets", e);
       }
     }
     return await localDB.assets.where("projectId").equals(projectId).toArray();
@@ -275,7 +410,7 @@ export class FirebaseDatabaseAdapter implements IDatabaseAdapter {
           await localDB.dailies.put(merged);
         }
       } catch (e) {
-        console.error("Firebase listDailies error:", e);
+        this.logOfflineError("listDailies", e);
       }
     }
     return await localDB.dailies.where("projectId").equals(projectId).toArray();
@@ -305,7 +440,7 @@ export class FirebaseDatabaseAdapter implements IDatabaseAdapter {
           await localDB.montages.put(merged);
         }
       } catch (e) {
-        console.error("Firebase listMontages error:", e);
+        this.logOfflineError("listMontages", e);
       }
     }
     return await localDB.montages.where("projectId").equals(projectId).toArray();
@@ -335,7 +470,7 @@ export class FirebaseDatabaseAdapter implements IDatabaseAdapter {
           await localDB.soundtracks.put(merged);
         }
       } catch (e) {
-        console.error("Firebase listSoundTracks error:", e);
+        this.logOfflineError("listSoundTracks", e);
       }
     }
     return await localDB.soundtracks.where("projectId").equals(projectId).toArray();
@@ -347,7 +482,7 @@ export class FirebaseDatabaseAdapter implements IDatabaseAdapter {
       try {
         await deleteDoc(doc(db, "soundtracks", id));
       } catch (e) {
-        console.error("Firebase deleteSoundTrack error:", e);
+        this.logOfflineError("deleteSoundTrack", e);
       }
     }
   }
@@ -371,7 +506,7 @@ export class FirebaseDatabaseAdapter implements IDatabaseAdapter {
           await localDB.audit_logs.put(remote);
         }
       } catch (e) {
-        console.error("Firebase listAuditLogs error:", e);
+        this.logOfflineError("listAuditLogs", e);
       }
     }
     return await localDB.audit_logs.where("projectId").equals(projectId).toArray();
@@ -436,7 +571,7 @@ export class FirebaseDatabaseAdapter implements IDatabaseAdapter {
         }
       }
     } catch (e) {
-      console.error("pullRemoteChanges error:", e);
+      this.logOfflineError("pullRemoteChanges", e);
     }
     return { updated: updatedCount, conflicts: conflictsList };
   }
@@ -478,20 +613,28 @@ export class FirebaseDatabaseAdapter implements IDatabaseAdapter {
 
   async getUserSettings(uid: string): Promise<UserSettings | null> {
     const local = await localDB.usuarios.get(uid);
+    if (local) {
+      if (this.isFirebaseConfigured() && navigator.onLine) {
+        this.backgroundSyncUserSettings(uid, local).catch(e => {
+          this.logOfflineError("backgroundSyncUserSettings", e);
+        });
+      }
+      return local;
+    }
+
     if (this.isFirebaseConfigured() && navigator.onLine) {
       try {
         const snap = await getDoc(doc(db, "usuarios", uid));
         if (snap.exists()) {
           const remote = snap.data() as UserSettings;
-          const merged = local ? { ...local, ...remote } : remote;
-          await localDB.usuarios.put(merged);
-          return merged;
+          await localDB.usuarios.put(remote);
+          return remote;
         }
       } catch (e) {
-        console.error("Firebase getUserSettings error:", e);
+        this.logOfflineError("getUserSettings", e);
       }
     }
-    return local || null;
+    return null;
   }
 }
 

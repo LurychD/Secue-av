@@ -63,6 +63,8 @@ export interface DynamicThemeColors {
   panel: string;      // 30%
   accent: string;     // 10%
   text: string;
+  accentLight?: string; // Optimizada para tema claro (WCAG >= 4.5)
+  accentDark?: string;  // Optimizada para tema oscuro (WCAG >= 4.5)
 }
 
 export interface ProjectCounters {

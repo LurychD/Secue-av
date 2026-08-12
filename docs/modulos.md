@@ -49,15 +49,21 @@ Este documento detalla cada una de las doce vistas modulares creadas e integrada
 - **Exportación EDL y OTIO**: Genera archivos estructurados Edit Decision List y OpenTimelineIO para Premiere, DaVinci Resolve o pipelines de postproducción avanzados.
 - **Respaldos CSV / JSON**: Descarga física de colecciones completas almacenadas en IndexedDB.
 
-## 10. Ajustes del Cortometraje (`ConfigProyectoView.tsx`)
+## 10. Vista Unificada de Configuración (`ConfigGeneralView.tsx` y `ConfigProyectoView.tsx`)
+- **Panel Unificado con Sidebar**: Consolida la configuración general del sistema, el perfil de usuario, la información técnica de diagnóstico y la gestión detallada del cortometraje en una única interfaz integral de nivel profesional.
 - **Tokens de Diseño CSS (Regla 60-30-10)**: Selector de color dinámico que inyecta variables CSS al DOM de la página al instante.
 - **Miembros estilo Discord**: Invita colaboradores asignando roles estrictos con privilegios detallados por colección.
+- **Seguridad 2FA TOTP & Notificaciones**: Gestión integrada de autenticación multifactor, secretos manuales y simulación de escaneo de código QR (Google Authenticator), junto con preferencias de canales de notificación locales de render.
+- **Panel Dev de Auditoría y Semillero**: Consola interactiva para auditar registros de logs locales en tiempo real, limpiar la IndexedDB local o sembrar datos de demostración instantáneamente.
 
-## 11. Ajustes del Usuario (`ConfigUsuarioView.tsx`)
-- **Perfil de Usuario**: Permite actualizar el nombre y email de la cuenta.
-- **Apariencia**: Alternancia interactiva entre modo oscuro cinematográfico y modo claro suave.
-- **Autenticación 2FA TOTP**: Genera secretos manuales y simula escaneo de código QR para habilitar autenticación de doble factor compatible con Google Authenticator.
+## 11. Arranque Optimizado y Selección de Proyectos (`ProjectSelectionView.tsx`)
+- **Arranque Ultra Rápido No Bloqueante**: Se eliminaron retardos artificiales del proceso de inicialización, permitiendo la apertura asíncrona inmediata de DexieJS y la carga instantánea de proyectos locales, mientras la sincronización remota con Firebase ocurre en segundo plano de manera no bloqueante.
+- **Encabezado Minimalista**: Interfaz pulida que elimina badges de bienvenida, descripciones redundantes y textos de versión, centrando el protagonismo en el título "Proyectos".
+- **Tarjetas de Proyecto Enriquecidas**:
+  - **Íconos Personalizados con Canvas**: Soporte para subida de imágenes de hasta 5MB, con herramientas interactivas de recorte, zoom y rotación en tiempo real procesadas a través de Canvas HTML5 y almacenadas como Base64.
+  - **Identificación de Roles**: Badge visual que indica el rol del usuario en el proyecto de manera jerárquica (Dueño, Artista, Tutor).
+  - **Métricas Claras**: Visualización del progreso en base a la cantidad de "Planos" (renombrado de Shots) y fotogramas totales.
 
-## 12. Wikipedia de Ayuda & Dev Panel (`DocumentacionView.tsx`)
-- **Artículos de Wiki**: Buscador interno con guía del cortometraje y explicaciones del pipeline.
-- **Dev Panel**: Consola técnica con el diagnóstico del IndexedDB, contador de transacciones locales pendientes y visor de logs de red remota con Firestore.
+## 12. Barra de Navegación Móvil Condicional
+- **Visibilidad Restringida**: La barra de navegación inferior móvil se muestra exclusivamente cuando el usuario se encuentra dentro de un proyecto activo, evitando la sobrecarga visual en la pantalla inicial de selección.
+- **Distribución de Módulos Eficiente**: Se eliminó el botón de "Proyectos" de la barra inferior móvil y fue reemplazado en el extremo izquierdo por el acceso directo al módulo de **Informes & Reportes** (ícono `BarChart3`).

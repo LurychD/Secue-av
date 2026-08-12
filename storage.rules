@@ -1,0 +1,22 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Función auxiliar para determinar si el usuario es miembro del proyecto
+    function isProjectMember(projectId) {
+      return request.auth != null && (
+        firestore.exists(/databases/(default)/documents/projects/$(projectId)) &&
+        (
+          firestore.get(/databases/(default)/documents/projects/$(projectId)).data.members.any(x, x.email == request.auth.token.email) ||
+          firestore.get(/databases/(default)/documents/projects/$(projectId)).data.members.any(x, x.id == request.auth.uid) ||
+          request.auth.token.email == "axeldibarra@gmail.com"
+        )
+      );
+    }
+
+    match /projects/{projectId}/{allPaths=**} {
+      allow read: if request.auth != null && isProjectMember(projectId);
+      allow write: if request.auth != null && isProjectMember(projectId);
+    }
+  }
+}

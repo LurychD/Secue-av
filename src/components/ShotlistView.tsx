@@ -24,6 +24,7 @@ export const ShotlistView: React.FC<ShotlistViewProps> = ({
   const [selectedShot, setSelectedShot] = useState<Shot | null>(null);
   const [activeTab, setActiveTab] = useState<"details" | "history">("details");
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [pendingShots, setPendingShots] = useState<Set<string>>(new Set());
   
   // Estados para creación de nuevo shot intermedio
   const [showAddModal, setShowAddModal] = useState(false);
@@ -37,6 +38,18 @@ export const ShotlistView: React.FC<ShotlistViewProps> = ({
     list.sort((a, b) => parseFloat(a.id) - parseFloat(b.id));
     setShots(list);
 
+    // Cargar pendientes de sincronización
+    try {
+      const pendingList = await localDB.pendingSync
+        .where("collection")
+        .equals("shots")
+        .toArray();
+      const pendingIds = new Set(pendingList.map(item => item.entityId));
+      setPendingShots(pendingIds);
+    } catch (err) {
+      console.warn("Fallo al cargar pendientes de sincronización:", err);
+    }
+
     // Mantener sincronizado el shot seleccionado
     if (selectedShot) {
       const updated = list.find(s => s.uuid === selectedShot.uuid);
@@ -46,6 +59,14 @@ export const ShotlistView: React.FC<ShotlistViewProps> = ({
 
   useEffect(() => {
     loadShots();
+
+    const handleDbUpdated = () => {
+      loadShots();
+    };
+    window.addEventListener("local-db-updated", handleDbUpdated);
+    return () => {
+      window.removeEventListener("local-db-updated", handleDbUpdated);
+    };
   }, [projectId]);
 
   // Manejar búsqueda global externa
@@ -241,8 +262,11 @@ export const ShotlistView: React.FC<ShotlistViewProps> = ({
                     selectedShot?.uuid === shot.uuid ? "bg-zinc-800/40 border-l-2 border-amber-500" : ""
                   }`}
                 >
-                  <div className="col-span-1 font-bold text-amber-400 font-mono text-sm">
+                  <div className="col-span-1 font-bold text-amber-400 font-mono text-sm flex items-center gap-1.5">
                     {shot.id}
+                    {pendingShots.has(shot.uuid) && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" title="Pendiente de sincronizar con la nube" />
+                    )}
                   </div>
                   <div className="col-span-2">
                     {shot.keyframeUrl ? (

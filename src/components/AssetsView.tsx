@@ -31,10 +31,23 @@ export const AssetsView: React.FC<AssetsViewProps> = ({
   const [newCategory, setNewCategory] = useState<AssetCategory>(AssetCategory.PERSONAJE);
   const [newDriveUrl, setNewDriveUrl] = useState("");
   const [newComments, setNewComments] = useState("");
+  const [pendingAssets, setPendingAssets] = useState<Set<string>>(new Set());
 
   const loadAssets = async () => {
     const list = await dbAdapter.listAssets(projectId);
     setAssets(list);
+
+    // Cargar pendientes de sincronización para assets
+    try {
+      const pendingList = await localDB.pendingSync
+        .where("collection")
+        .equals("assets")
+        .toArray();
+      const pendingIds = new Set(pendingList.map(item => item.entityId));
+      setPendingAssets(pendingIds);
+    } catch (err) {
+      console.warn("Fallo al cargar assets pendientes de sincronización:", err);
+    }
 
     if (selectedAsset) {
       const updated = list.find(a => a.id === selectedAsset.id);
@@ -44,6 +57,14 @@ export const AssetsView: React.FC<AssetsViewProps> = ({
 
   useEffect(() => {
     loadAssets();
+
+    const handleDbUpdated = () => {
+      loadAssets();
+    };
+    window.addEventListener("local-db-updated", handleDbUpdated);
+    return () => {
+      window.removeEventListener("local-db-updated", handleDbUpdated);
+    };
   }, [projectId]);
 
   // Manejar búsqueda global externa
@@ -244,8 +265,11 @@ export const AssetsView: React.FC<AssetsViewProps> = ({
                     {/* Metadata Básica */}
                     <div className="p-3.5 space-y-3 flex-1 flex flex-col justify-between">
                       <div>
-                        <h4 className="text-sm font-bold text-zinc-100 group-hover:text-emerald-400 transition-colors">
-                          {asset.name}
+                        <h4 className="text-sm font-bold text-zinc-100 group-hover:text-emerald-400 transition-colors flex items-center justify-between gap-1.5">
+                          <span>{asset.name}</span>
+                          {pendingAssets.has(asset.id) && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0 animate-bounce" title="Pendiente de sincronizar con la nube" />
+                          )}
                         </h4>
                         <p className="text-[11px] text-zinc-400 mt-1 line-clamp-2 font-sans leading-relaxed">
                           {asset.comments}
